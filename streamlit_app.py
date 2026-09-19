@@ -883,7 +883,7 @@ except Exception as e:
 # ==================================================
 
 st.title(
-    "🐱 ねもちゃん市場"
+    "🐱 Nemo Garden"
 )
 
 st.caption(
@@ -1101,7 +1101,7 @@ with market_tab:
 with fishing_tab:
 
     st.header(
-        "🎣 ねもちゃん釣り場"
+        "🎣 星の釣り場"
     )
 
     st.write(
@@ -1111,7 +1111,7 @@ with fishing_tab:
     st.write(
         "1日1回だけ、"
         "ねもちゃんが釣りに出かけます。"
-    )
+    )す
 
 
     try:
