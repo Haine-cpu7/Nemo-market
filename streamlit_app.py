@@ -1111,7 +1111,7 @@ with fishing_tab:
     st.write(
         "1日1回だけ、"
         "ねもちゃんが釣りに出かけます。"
-    )す
+    )
 
 
     try:
