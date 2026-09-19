@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 # ==================================================
 
 st.set_page_config(
-    page_title="ねもちゃん市場",
+    page_title="Nemo Garden",
     page_icon="🐱",
     layout="centered"
 )
