@@ -60,7 +60,7 @@ h3 {
 
 
 # ==================================================
-# Supabase
+# 共通設定
 # ==================================================
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -71,13 +71,42 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+TOKYO = ZoneInfo("Asia/Tokyo")
+
+
+def today_str():
+    return datetime.now(TOKYO).date().isoformat()
+
 
 # ==================================================
-# 星待館データ
+# 市場データ
+# ==================================================
+
+@st.cache_data(ttl=300)
+def get_market_data():
+    url = "https://api.coingecko.com/api/v3/simple/price"
+
+    params = {
+        "ids": "bitcoin,ethereum,solana",
+        "vs_currencies": "jpy",
+        "include_24hr_change": "true"
+    }
+
+    response = requests.get(
+        url,
+        params=params,
+        timeout=10
+    )
+
+    response.raise_for_status()
+    return response.json()
+
+
+# ==================================================
+# 星待館
 # ==================================================
 
 def load_game():
-
     url = (
         f"{SUPABASE_URL}/rest/v1/game_state"
         "?id=eq.1&select=*"
@@ -90,19 +119,15 @@ def load_game():
     )
 
     response.raise_for_status()
-
     rows = response.json()
 
     if not rows:
-        raise RuntimeError(
-            "星待館のセーブデータが見つかりません。"
-        )
+        raise RuntimeError("星待館のセーブデータが見つかりません。")
 
     return rows[0]
 
 
 def save_game(game):
-
     url = (
         f"{SUPABASE_URL}/rest/v1/game_state"
         "?id=eq.1"
@@ -129,44 +154,8 @@ def save_game(game):
     response.raise_for_status()
 
 
-# ==================================================
-# 市場データ
-# ==================================================
-
-@st.cache_data(ttl=300)
-def get_market_data():
-
-    url = (
-        "https://api.coingecko.com/api/v3/"
-        "simple/price"
-    )
-
-    params = {
-        "ids": "bitcoin,ethereum,solana",
-        "vs_currencies": "jpy",
-        "include_24hr_change": "true"
-    }
-
-    response = requests.get(
-        url,
-        params=params,
-        timeout=10
-    )
-
-    response.raise_for_status()
-
-    return response.json()
-
-
-# ==================================================
-# 星待館を1日1回成長
-# ==================================================
-
 def update_game_once_per_day(game, market):
-
-    today = datetime.now(
-        ZoneInfo("Asia/Tokyo")
-    ).date().isoformat()
+    today = today_str()
 
     if game.get("last_update") == today:
         return game
@@ -182,19 +171,15 @@ def update_game_once_per_day(game, market):
     if average_change >= 5:
         guest_change = 5
         energy_change = 5
-
     elif average_change >= 2:
         guest_change = 3
         energy_change = 3
-
     elif average_change >= 0:
         guest_change = 1
         energy_change = 1
-
     elif average_change >= -3:
         guest_change = -1
         energy_change = -2
-
     else:
         guest_change = -3
         energy_change = -5
@@ -213,8 +198,7 @@ def update_game_once_per_day(game, market):
         100,
         max(
             0,
-            int(game["nemo_energy"])
-            + energy_change
+            int(game["nemo_energy"]) + energy_change
         )
     )
 
@@ -229,12 +213,11 @@ def update_game_once_per_day(game, market):
     }
 
     save_game(updated)
-
     return updated
 
 
 # ==================================================
-# 釣り場データ
+# 釣り場
 # ==================================================
 
 FISH_LIST = [
@@ -298,10 +281,7 @@ FISH_LIST = [
 
 
 def get_today_catch():
-
-    today = datetime.now(
-        ZoneInfo("Asia/Tokyo")
-    ).date().isoformat()
+    today = today_str()
 
     url = (
         f"{SUPABASE_URL}/rest/v1/fishing_log"
@@ -315,22 +295,17 @@ def get_today_catch():
     )
 
     response.raise_for_status()
-
     rows = response.json()
 
-    if rows:
-        return rows[0]
-
-    return None
+    return rows[0] if rows else None
 
 
-def get_recent_catches():
-
+def get_recent_catches(limit=30):
     url = (
         f"{SUPABASE_URL}/rest/v1/fishing_log"
         "?select=*"
         "&order=fishing_date.desc"
-        "&limit=10"
+        f"&limit={limit}"
     )
 
     response = requests.get(
@@ -340,22 +315,15 @@ def get_recent_catches():
     )
 
     response.raise_for_status()
-
     return response.json()
 
 
 def catch_fish():
-
-    today = datetime.now(
-        ZoneInfo("Asia/Tokyo")
-    ).date().isoformat()
+    today = today_str()
 
     fish = random.choices(
         FISH_LIST,
-        weights=[
-            item["weight"]
-            for item in FISH_LIST
-        ],
+        weights=[item["weight"] for item in FISH_LIST],
         k=1
     )[0]
 
@@ -375,9 +343,7 @@ def catch_fish():
         "note": fish["note"]
     }
 
-    url = (
-        f"{SUPABASE_URL}/rest/v1/fishing_log"
-    )
+    url = f"{SUPABASE_URL}/rest/v1/fishing_log"
 
     response = requests.post(
         url,
@@ -389,19 +355,247 @@ def catch_fish():
         timeout=10
     )
 
-    # 誰かがほぼ同時に釣った場合、
-    # 先に保存された今日の魚を表示する
     if response.status_code == 409:
         return get_today_catch()
 
     response.raise_for_status()
-
     rows = response.json()
 
-    if rows:
-        return rows[0]
+    return rows[0] if rows else get_today_catch()
 
-    return get_today_catch()
+
+# ==================================================
+# 庭園
+# ==================================================
+
+PLANT_LIST = [
+    {
+        "name": "たんぽぽ",
+        "rarity": "★",
+        "weight": 32,
+        "emoji": "🌼"
+    },
+    {
+        "name": "クローバー",
+        "rarity": "★",
+        "weight": 28,
+        "emoji": "🍀"
+    },
+    {
+        "name": "チューリップ",
+        "rarity": "★★",
+        "weight": 20,
+        "emoji": "🌷"
+    },
+    {
+        "name": "桜草",
+        "rarity": "★★★",
+        "weight": 12,
+        "emoji": "🌸"
+    },
+    {
+        "name": "青い星花",
+        "rarity": "★★★★",
+        "weight": 6,
+        "emoji": "💠"
+    },
+    {
+        "name": "星待花",
+        "rarity": "★★★★★",
+        "weight": 2,
+        "emoji": "✨"
+    }
+]
+
+
+def load_garden():
+    url = (
+        f"{SUPABASE_URL}/rest/v1/garden_state"
+        "?id=eq.1&select=*"
+    )
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        timeout=10
+    )
+
+    response.raise_for_status()
+    rows = response.json()
+
+    if not rows:
+        raise RuntimeError("庭園のセーブデータが見つかりません。")
+
+    return rows[0]
+
+
+def save_garden(garden):
+    url = (
+        f"{SUPABASE_URL}/rest/v1/garden_state"
+        "?id=eq.1"
+    )
+
+    payload = {
+        "plant_name": garden["plant_name"],
+        "rarity": garden["rarity"],
+        "growth_stage": garden["growth_stage"],
+        "started_date": garden["started_date"],
+        "last_tended_date": garden["last_tended_date"],
+        "blooms": garden["blooms"]
+    }
+
+    response = requests.patch(
+        url,
+        headers={
+            **HEADERS,
+            "Prefer": "return=minimal"
+        },
+        json=payload,
+        timeout=10
+    )
+
+    response.raise_for_status()
+
+
+def add_bloom_log(plant_name, rarity):
+    payload = {
+        "bloom_date": today_str(),
+        "plant_name": plant_name,
+        "rarity": rarity
+    }
+
+    url = f"{SUPABASE_URL}/rest/v1/garden_log"
+
+    response = requests.post(
+        url,
+        headers={
+            **HEADERS,
+            "Prefer": "return=minimal"
+        },
+        json=payload,
+        timeout=10
+    )
+
+    response.raise_for_status()
+
+
+def get_garden_log(limit=100):
+    url = (
+        f"{SUPABASE_URL}/rest/v1/garden_log"
+        "?select=*"
+        "&order=bloom_date.desc"
+        f"&limit={limit}"
+    )
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        timeout=10
+    )
+
+    response.raise_for_status()
+    return response.json()
+
+
+def choose_plant():
+    return random.choices(
+        PLANT_LIST,
+        weights=[item["weight"] for item in PLANT_LIST],
+        k=1
+    )[0]
+
+
+def tend_garden(garden):
+    today = today_str()
+
+    if garden.get("last_tended_date") == today:
+        return garden, "already"
+
+    if (
+        not garden.get("plant_name")
+        or int(garden.get("growth_stage", 0)) >= 3
+    ):
+        plant = choose_plant()
+
+        updated = {
+            "plant_name": plant["name"],
+            "rarity": plant["rarity"],
+            "growth_stage": 1,
+            "started_date": today,
+            "last_tended_date": today,
+            "blooms": int(garden.get("blooms", 0))
+        }
+
+        save_garden(updated)
+        return updated, "planted"
+
+    stage = int(garden.get("growth_stage", 0))
+
+    if stage == 1:
+        updated = {
+            **garden,
+            "growth_stage": 2,
+            "last_tended_date": today
+        }
+
+        save_garden(updated)
+        return updated, "grown"
+
+    if stage == 2:
+        updated = {
+            **garden,
+            "growth_stage": 3,
+            "last_tended_date": today,
+            "blooms": int(garden.get("blooms", 0)) + 1
+        }
+
+        save_garden(updated)
+
+        add_bloom_log(
+            updated["plant_name"],
+            updated["rarity"]
+        )
+
+        return updated, "bloomed"
+
+    return garden, "already"
+
+
+def get_plant_meta(name):
+    for plant in PLANT_LIST:
+        if plant["name"] == name:
+            return plant
+
+    return {
+        "name": name or "？？？",
+        "rarity": "",
+        "emoji": "🌱"
+    }
+
+
+def garden_stage_text(garden):
+    stage = int(garden.get("growth_stage", 0))
+    plant = get_plant_meta(garden.get("plant_name"))
+
+    if stage == 0 or not garden.get("plant_name"):
+        return "🪴 まだ何も植わっていません。"
+
+    if stage == 1:
+        return (
+            f"🌱 {plant['name']}の芽が出ました。"
+            "まだ小さいけれど、元気に育っています。"
+        )
+
+    if stage == 2:
+        return (
+            f"🌿 {plant['name']}の葉が増えてきました。"
+            "もう少しで花が咲きそうです。"
+        )
+
+    return (
+        f"{plant['emoji']} {plant['name']}が咲きました！ "
+        f"{garden.get('rarity', '')}"
+    )
 
 
 # ==================================================
@@ -409,23 +603,13 @@ def catch_fish():
 # ==================================================
 
 try:
-
     market = get_market_data()
     game = load_game()
-
-    game = update_game_once_per_day(
-        game,
-        market
-    )
+    game = update_game_once_per_day(game, market)
 
 except Exception as e:
-
-    st.error(
-        "ねもちゃん市場の読み込みに失敗しました。"
-    )
-
+    st.error("ねもちゃん市場の読み込みに失敗しました。")
     st.code(str(e))
-
     st.stop()
 
 
@@ -442,13 +626,14 @@ st.caption(
 
 
 # ==================================================
-# ページ切り替え
+# 3タブ
 # ==================================================
 
-market_tab, fishing_tab = st.tabs(
+market_tab, fishing_tab, garden_tab = st.tabs(
     [
         "📈 市場・星待館",
-        "🎣 釣り場"
+        "🎣 釣り場",
+        "🌸 庭園"
     ]
 )
 
@@ -464,7 +649,6 @@ with market_tab:
     btc, eth, sol = st.columns(3)
 
     with btc:
-
         st.metric(
             "BTC",
             f"¥{market['bitcoin']['jpy']:,.0f}",
@@ -472,7 +656,6 @@ with market_tab:
         )
 
     with eth:
-
         st.metric(
             "ETH",
             f"¥{market['ethereum']['jpy']:,.0f}",
@@ -480,7 +663,6 @@ with market_tab:
         )
 
     with sol:
-
         st.metric(
             "SOL",
             f"¥{market['solana']['jpy']:,.0f}",
@@ -499,7 +681,6 @@ with market_tab:
     left, right = st.columns(2)
 
     with left:
-
         st.metric(
             "👥 宿泊客",
             f"{game['guests']}人"
@@ -511,7 +692,6 @@ with market_tab:
         )
 
     with right:
-
         st.metric(
             "🐱 元気度",
             f"{game['nemo_energy']} / 100"
@@ -534,28 +714,21 @@ with market_tab:
 
     st.header("📰 今日の星待館だより")
 
-
     if average_change >= 5:
-
         st.write(
             "🎉 市場はかなり好調。"
-            "星待館にもお客さんが"
-            "続々とやってきています。"
+            "星待館にもお客さんが続々とやってきています。"
         )
 
         st.write(
             "🐱 ねもちゃん絶好調。"
-            "温泉街を元気いっぱい"
-            "走り回っています。"
+            "温泉街を元気いっぱい走り回っています。"
         )
 
-
     elif average_change >= 2:
-
         st.write(
             "🌸 市場は好調。"
-            "星待館にお客さんが"
-            "増えています。"
+            "星待館にお客さんが増えています。"
         )
 
         st.write(
@@ -563,39 +736,30 @@ with market_tab:
             "今日は宿のお手伝いをしています。"
         )
 
-
     elif average_change >= 0:
-
         st.write(
             "🍵 市場は穏やか。"
             "星待館ものんびりした一日です。"
         )
 
         st.write(
-            "🐱 ねもちゃんは"
-            "縁側でひと休み中。"
+            "🐱 ねもちゃんは縁側でひと休み中。"
         )
 
-
     elif average_change >= -3:
-
         st.write(
             "🌧️ 市場は少し元気がありません。"
             "星待館も今日は静かです。"
         )
 
         st.write(
-            "🐱 ねもちゃんは"
-            "温泉でのんびりしています。"
+            "🐱 ねもちゃんは温泉でのんびりしています。"
         )
 
-
     else:
-
         st.write(
             "⛈️ 市場は大荒れ。"
-            "温泉街にも静かな空気が"
-            "流れています。"
+            "温泉街にも静かな空気が流れています。"
         )
 
         st.write(
@@ -603,11 +767,9 @@ with market_tab:
             "ねもちゃんは温泉につかっています。"
         )
 
-
     st.write(
         "🎁 売店に謎の新商品が入荷しました。"
     )
-
 
     st.info(
         "🌌 SPECIAL EVENT："
@@ -633,23 +795,13 @@ with fishing_tab:
     )
 
     try:
-
         today_catch = get_today_catch()
 
     except Exception as e:
-
-        st.error(
-            "釣り場の読み込みに失敗しました。"
-        )
-
+        st.error("釣り場の読み込みに失敗しました。")
         st.code(str(e))
-
         st.stop()
 
-
-    # ----------------------------------------------
-    # まだ今日釣っていない
-    # ----------------------------------------------
 
     if today_catch is None:
 
@@ -661,29 +813,14 @@ with fishing_tab:
             "🎣 今日の釣りをする",
             use_container_width=True
         ):
-
             try:
-
-                today_catch = catch_fish()
-
-                st.success(
-                    "ねもちゃんが何か釣った！"
-                )
-
+                catch_fish()
+                st.success("ねもちゃんが何か釣った！")
                 st.rerun()
 
             except Exception as e:
-
-                st.error(
-                    "釣りに失敗しました。"
-                )
-
+                st.error("釣りに失敗しました。")
                 st.code(str(e))
-
-
-    # ----------------------------------------------
-    # 今日の釣果
-    # ----------------------------------------------
 
     else:
 
@@ -701,14 +838,12 @@ with fishing_tab:
         col1, col2 = st.columns(2)
 
         with col1:
-
             st.metric(
                 "レア度",
                 today_catch["rarity"]
             )
 
         with col2:
-
             st.metric(
                 "サイズ",
                 f'{today_catch["size_cm"]} cm'
@@ -723,27 +858,19 @@ with fishing_tab:
         )
 
 
-    # ----------------------------------------------
-    # 最近の釣果
-    # ----------------------------------------------
-
     st.divider()
 
     st.subheader("📖 最近の釣果")
 
     try:
-
         recent = get_recent_catches()
 
     except Exception:
-
         recent = []
 
 
     if recent:
-
         for catch in recent[:5]:
-
             st.write(
                 f'**{catch["fishing_date"]}**　'
                 f'{catch["fish_name"]}　'
@@ -752,15 +879,10 @@ with fishing_tab:
             )
 
     else:
-
         st.caption(
             "まだ釣果がありません。"
         )
 
-
-    # ----------------------------------------------
-    # 魚図鑑
-    # ----------------------------------------------
 
     st.divider()
 
@@ -771,8 +893,6 @@ with fishing_tab:
         for catch in recent
     }
 
-    total_species = len(FISH_LIST)
-
     discovered = sum(
         1
         for fish in FISH_LIST
@@ -780,17 +900,209 @@ with fishing_tab:
     )
 
     st.write(
-        f"**{discovered} / {total_species} 種類発見**"
+        f"**{discovered} / {len(FISH_LIST)} 種類発見**"
     )
-
 
     for fish in FISH_LIST:
 
         if fish["name"] in caught_names:
-
             st.write(
                 f'🐟 **{fish["name"]}** '
                 f'{fish["rarity"]}'
+            )
+
+        else:
+            st.write(
+                "❓ **？？？**"
+            )
+
+    st.caption(
+        "いろんな魚を釣って、図鑑を埋めよう。"
+    )
+
+
+# ==================================================
+# 庭園
+# ==================================================
+
+with garden_tab:
+
+    st.header("🌸 ねもちゃん庭園")
+
+    st.write(
+        "星待館の小さなお庭。"
+    )
+
+    st.write(
+        "1日1回お世話すると、"
+        "少しずつ植物が育ちます。"
+    )
+
+    try:
+        garden = load_garden()
+        garden_log = get_garden_log()
+
+    except Exception as e:
+        st.error("庭園の読み込みに失敗しました。")
+        st.code(str(e))
+        st.stop()
+
+
+    st.subheader("🪴 今日のお庭")
+
+    st.info(
+        garden_stage_text(garden)
+    )
+
+
+    if garden.get("plant_name"):
+
+        plant_meta = get_plant_meta(
+            garden["plant_name"]
+        )
+
+        st.write(
+            f"育てている植物："
+            f"**{plant_meta['emoji']} {garden['plant_name']}**"
+        )
+
+        st.write(
+            f"レア度：**{garden.get('rarity', '')}**"
+        )
+
+        stage = int(
+            garden.get("growth_stage", 0)
+        )
+
+        if stage == 1:
+            st.progress(33)
+
+        elif stage == 2:
+            st.progress(66)
+
+        elif stage >= 3:
+            st.progress(100)
+
+
+    already_tended = (
+        garden.get("last_tended_date")
+        == today_str()
+    )
+
+
+    if already_tended:
+
+        st.success(
+            "🐱 今日はもうお庭のお世話をしました！"
+        )
+
+        st.caption(
+            "また明日見に来よう。"
+        )
+
+    else:
+
+        if not garden.get("plant_name"):
+            button_text = "🌱 種を植える"
+
+        elif int(garden.get("growth_stage", 0)) >= 3:
+            button_text = "🌱 次の植物を育てる"
+
+        else:
+            button_text = "💧 今日のお世話をする"
+
+
+        if st.button(
+            button_text,
+            use_container_width=True
+        ):
+            try:
+
+                updated_garden, result = tend_garden(
+                    garden
+                )
+
+                if result == "planted":
+                    st.success(
+                        "🌱 ねもちゃんが新しい種を植えました！"
+                    )
+
+                elif result == "grown":
+                    st.success(
+                        "🌿 植物が少し大きくなりました！"
+                    )
+
+                elif result == "bloomed":
+                    st.balloons()
+                    st.success(
+                        f"🌸 {updated_garden['plant_name']}が咲きました！"
+                    )
+
+                st.rerun()
+
+            except Exception as e:
+                st.error(
+                    "お庭のお世話に失敗しました。"
+                )
+
+                st.code(str(e))
+
+
+    st.divider()
+
+    st.subheader("🌺 これまで咲いた花")
+
+    if garden_log:
+
+        for bloom in garden_log[:5]:
+
+            meta = get_plant_meta(
+                bloom["plant_name"]
+            )
+
+            st.write(
+                f'**{bloom["bloom_date"]}**　'
+                f'{meta["emoji"]} '
+                f'{bloom["plant_name"]}　'
+                f'{bloom["rarity"]}'
+            )
+
+    else:
+
+        st.caption(
+            "まだ花は咲いていません。"
+        )
+
+
+    st.divider()
+
+    st.subheader("📗 植物図鑑")
+
+    bloomed_names = {
+        bloom["plant_name"]
+        for bloom in garden_log
+    }
+
+    discovered_plants = sum(
+        1
+        for plant in PLANT_LIST
+        if plant["name"] in bloomed_names
+    )
+
+    st.write(
+        f"**{discovered_plants} / "
+        f"{len(PLANT_LIST)} 種類発見**"
+    )
+
+
+    for plant in PLANT_LIST:
+
+        if plant["name"] in bloomed_names:
+
+            st.write(
+                f'{plant["emoji"]} '
+                f'**{plant["name"]}** '
+                f'{plant["rarity"]}'
             )
 
         else:
@@ -801,8 +1113,8 @@ with fishing_tab:
 
 
     st.caption(
-        "いろんな魚を釣って、"
-        "図鑑を埋めよう。"
+        "少しずつ育てて、"
+        "星待館のお庭を花でいっぱいにしよう。"
     )
 
 
@@ -812,9 +1124,7 @@ with fishing_tab:
 
 st.divider()
 
-now = datetime.now(
-    ZoneInfo("Asia/Tokyo")
-)
+now = datetime.now(TOKYO)
 
 st.caption(
     f"市場データ取得："
@@ -822,10 +1132,6 @@ st.caption(
 )
 
 st.caption(
-    "星待館は1日1回、"
-    "現実の市場に合わせて変化します。"
-)
-
-st.caption(
-    "釣り場の釣果も1日1回記録されます。"
+    "星待館・釣り場・庭園は、"
+    "みんなで同じ世界を共有しています。"
 )
