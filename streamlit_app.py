@@ -17,11 +17,6 @@ st.set_page_config(
     layout="centered",
 )
 
-
-# ==================================================
-# スマホ向け表示
-# ==================================================
-
 st.markdown(
     """
 <style>
@@ -90,6 +85,7 @@ def today_str():
 @st.cache_data(ttl=300)
 def get_market_data():
     url = "https://api.coingecko.com/api/v3/simple/price"
+
     params = {
         "ids": "bitcoin,ethereum,solana",
         "vs_currencies": "jpy",
@@ -102,6 +98,7 @@ def get_market_data():
         timeout=10,
     )
     response.raise_for_status()
+
     return response.json()
 
 
@@ -176,15 +173,19 @@ def update_game_once_per_day(game, market):
     if average_change >= 5:
         guest_change = 5
         energy_change = 5
+
     elif average_change >= 2:
         guest_change = 3
         energy_change = 3
+
     elif average_change >= 0:
         guest_change = 1
         energy_change = 1
+
     elif average_change >= -3:
         guest_change = -1
         energy_change = -2
+
     else:
         guest_change = -3
         energy_change = -5
@@ -222,6 +223,7 @@ def update_game_once_per_day(game, market):
     }
 
     save_game(updated)
+
     return updated
 
 
@@ -305,6 +307,7 @@ def get_today_catch():
     response.raise_for_status()
 
     rows = response.json()
+
     return rows[0] if rows else None
 
 
@@ -322,6 +325,7 @@ def get_recent_catches(limit=30):
         timeout=10,
     )
     response.raise_for_status()
+
     return response.json()
 
 
@@ -330,7 +334,10 @@ def catch_fish():
 
     fish = random.choices(
         FISH_LIST,
-        weights=[item["weight"] for item in FISH_LIST],
+        weights=[
+            item["weight"]
+            for item in FISH_LIST
+        ],
         k=1,
     )[0]
 
@@ -350,7 +357,9 @@ def catch_fish():
         "note": fish["note"],
     }
 
-    url = f"{SUPABASE_URL}/rest/v1/fishing_log"
+    url = (
+        f"{SUPABASE_URL}/rest/v1/fishing_log"
+    )
 
     response = requests.post(
         url,
@@ -368,7 +377,12 @@ def catch_fish():
     response.raise_for_status()
 
     rows = response.json()
-    return rows[0] if rows else get_today_catch()
+
+    return (
+        rows[0]
+        if rows
+        else get_today_catch()
+    )
 
 
 # ==================================================
@@ -472,7 +486,9 @@ def add_bloom_log(plant_name, rarity):
         "rarity": rarity,
     }
 
-    url = f"{SUPABASE_URL}/rest/v1/garden_log"
+    url = (
+        f"{SUPABASE_URL}/rest/v1/garden_log"
+    )
 
     response = requests.post(
         url,
@@ -500,13 +516,17 @@ def get_garden_log(limit=100):
         timeout=10,
     )
     response.raise_for_status()
+
     return response.json()
 
 
 def choose_plant():
     return random.choices(
         PLANT_LIST,
-        weights=[item["weight"] for item in PLANT_LIST],
+        weights=[
+            item["weight"]
+            for item in PLANT_LIST
+        ],
         k=1,
     )[0]
 
@@ -529,13 +549,18 @@ def tend_garden(garden):
             "growth_stage": 1,
             "started_date": today,
             "last_tended_date": today,
-            "blooms": int(garden.get("blooms", 0)),
+            "blooms": int(
+                garden.get("blooms", 0)
+            ),
         }
 
         save_garden(updated)
+
         return updated, "planted"
 
-    stage = int(garden.get("growth_stage", 0))
+    stage = int(
+        garden.get("growth_stage", 0)
+    )
 
     if stage == 1:
         updated = {
@@ -545,6 +570,7 @@ def tend_garden(garden):
         }
 
         save_garden(updated)
+
         return updated, "grown"
 
     if stage == 2:
@@ -552,14 +578,19 @@ def tend_garden(garden):
             **garden,
             "growth_stage": 3,
             "last_tended_date": today,
-            "blooms": int(garden.get("blooms", 0)) + 1,
+            "blooms": (
+                int(garden.get("blooms", 0))
+                + 1
+            ),
         }
 
         save_garden(updated)
+
         add_bloom_log(
             updated["plant_name"],
             updated["rarity"],
         )
+
         return updated, "bloomed"
 
     return garden, "already"
@@ -578,11 +609,21 @@ def get_plant_meta(name):
 
 
 def garden_stage_text(garden):
-    stage = int(garden.get("growth_stage", 0))
-    plant = get_plant_meta(garden.get("plant_name"))
+    stage = int(
+        garden.get("growth_stage", 0)
+    )
 
-    if stage == 0 or not garden.get("plant_name"):
-        return "🪴 まだ何も植わっていません。"
+    plant = get_plant_meta(
+        garden.get("plant_name")
+    )
+
+    if (
+        stage == 0
+        or not garden.get("plant_name")
+    ):
+        return (
+            "🪴 まだ何も植わっていません。"
+        )
 
     if stage == 1:
         return (
@@ -659,21 +700,34 @@ def get_inventory():
         timeout=10,
     )
     response.raise_for_status()
+
     return response.json()
 
 
-def get_available_coins(game, inventory):
-    earned = int(game.get("shop_coins", 0))
+def get_available_coins(
+    game,
+    inventory,
+):
+    earned = int(
+        game.get("shop_coins", 0)
+    )
 
     spent = sum(
         int(item.get("price", 0))
         for item in inventory
     )
 
-    return max(0, earned - spent)
+    return max(
+        0,
+        earned - spent,
+    )
 
 
-def buy_item(item, game, inventory):
+def buy_item(
+    item,
+    game,
+    inventory,
+):
     owned_keys = {
         row["item_key"]
         for row in inventory
@@ -696,7 +750,9 @@ def buy_item(item, game, inventory):
         "price": item["price"],
     }
 
-    url = f"{SUPABASE_URL}/rest/v1/shop_inventory"
+    url = (
+        f"{SUPABASE_URL}/rest/v1/shop_inventory"
+    )
 
     response = requests.post(
         url,
@@ -712,6 +768,7 @@ def buy_item(item, game, inventory):
         return "owned"
 
     response.raise_for_status()
+
     return "purchased"
 
 
@@ -730,15 +787,25 @@ OPENSEA_ACCOUNT_NFTS_URL = (
     "{chain}/account/{address}/nfts"
 )
 
+OPENSEA_COLLECTION_EVENTS_URL = (
+    "https://api.opensea.io/api/v2/events/"
+    "collection/{slug}"
+)
+
 ADDRESS_RE = re.compile(
     r"^0x[a-fA-F0-9]{40}$"
 )
 
 
-@st.cache_resource(ttl=6 * 24 * 60 * 60)
+@st.cache_resource(
+    ttl=6 * 24 * 60 * 60
+)
 def get_opensea_api_key():
     try:
-        configured_key = st.secrets["OPENSEA_API_KEY"]
+        configured_key = (
+            st.secrets["OPENSEA_API_KEY"]
+        )
+
     except Exception:
         configured_key = ""
 
@@ -752,6 +819,7 @@ def get_opensea_api_key():
     response.raise_for_status()
 
     payload = response.json()
+
     api_key = payload.get("api_key")
 
     if not api_key:
@@ -762,7 +830,10 @@ def get_opensea_api_key():
     return api_key
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(
+    ttl=60,
+    show_spinner=False,
+)
 def get_nemo_nfts(address):
     api_key = get_opensea_api_key()
 
@@ -779,45 +850,197 @@ def get_nemo_nfts(address):
     last_error = None
 
     for chain in chain_candidates:
-        url = OPENSEA_ACCOUNT_NFTS_URL.format(
-            chain=chain,
-            address=address,
+        url = (
+            OPENSEA_ACCOUNT_NFTS_URL.format(
+                chain=chain,
+                address=address,
+            )
         )
 
+        all_nfts = []
+        next_cursor = None
+
         try:
-            response = requests.get(
-                url,
-                headers=headers,
-                params={
+            while True:
+                params = {
                     "collection": COLLECTION_SLUG,
                     "include_auto_hidden": "true",
-                    "limit": 20,
-                },
-                timeout=20,
-            )
+                    "limit": 200,
+                }
+
+                if next_cursor:
+                    params["next"] = next_cursor
+
+                response = requests.get(
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=20,
+                )
+
+                if response.status_code in (
+                    400,
+                    404,
+                ):
+                    last_error = RuntimeError(
+                        "OpenSea API returned "
+                        f"{response.status_code}: "
+                        f"{response.text[:200]}"
+                    )
+                    break
+
+                response.raise_for_status()
+
+                payload = response.json()
+
+                all_nfts.extend(
+                    payload.get("nfts", [])
+                )
+
+                next_cursor = payload.get(
+                    "next"
+                )
+
+                if not next_cursor:
+                    return (
+                        all_nfts,
+                        chain,
+                    )
+
         except requests.RequestException as exc:
             last_error = exc
             continue
-
-        if response.status_code == 200:
-            payload = response.json()
-            return payload.get("nfts", []), chain
-
-        if response.status_code in (400, 404):
-            last_error = RuntimeError(
-                "OpenSea API returned "
-                f"{response.status_code}: "
-                f"{response.text[:200]}"
-            )
-            continue
-
-        response.raise_for_status()
 
     if last_error:
         raise last_error
 
     raise RuntimeError(
         "NFT保有状況を確認できませんでした。"
+    )
+
+
+@st.cache_data(
+    ttl=60 * 60,
+    show_spinner=False,
+)
+def get_nemo_first_acquired_date(
+    address,
+):
+    """
+    NemoCollection2023の履歴から、
+    このウォレットが初めてNemoを
+    受け取った日を探す。
+    """
+
+    api_key = get_opensea_api_key()
+
+    headers = {
+        "X-API-KEY": api_key,
+        "Accept": "application/json",
+    }
+
+    url = (
+        OPENSEA_COLLECTION_EVENTS_URL.format(
+            slug=COLLECTION_SLUG
+        )
+    )
+
+    target_address = address.lower()
+    earliest_timestamp = None
+
+    for event_type in (
+        "transfer",
+        "mint",
+    ):
+        next_cursor = None
+        page_count = 0
+
+        while True:
+            params = {
+                "event_type": event_type,
+                "limit": 200,
+            }
+
+            if next_cursor:
+                params["next"] = next_cursor
+
+            response = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=20,
+            )
+            response.raise_for_status()
+
+            payload = response.json()
+
+            events = payload.get(
+                "asset_events",
+                [],
+            )
+
+            for event in events:
+                to_address = (
+                    event.get("to_address")
+                    or ""
+                ).lower()
+
+                if (
+                    to_address
+                    != target_address
+                ):
+                    continue
+
+                timestamp = event.get(
+                    "event_timestamp"
+                )
+
+                if timestamp is None:
+                    continue
+
+                try:
+                    timestamp = int(
+                        timestamp
+                    )
+
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    continue
+
+                if (
+                    earliest_timestamp
+                    is None
+                    or timestamp
+                    < earliest_timestamp
+                ):
+                    earliest_timestamp = (
+                        timestamp
+                    )
+
+            next_cursor = payload.get(
+                "next"
+            )
+
+            page_count += 1
+
+            if (
+                not next_cursor
+                or page_count >= 30
+            ):
+                break
+
+    if earliest_timestamp is None:
+        return None
+
+    first_date = datetime.fromtimestamp(
+        earliest_timestamp,
+        tz=TOKYO,
+    )
+
+    return first_date.strftime(
+        "%Y/%m/%d"
     )
 
 
@@ -888,26 +1111,33 @@ with market_tab:
         st.metric(
             "BTC",
             f"¥{market['bitcoin']['jpy']:,.0f}",
-            f"{market['bitcoin']['jpy_24h_change']:+.2f}%",
+            (
+                f"{market['bitcoin']['jpy_24h_change']:+.2f}%"
+            ),
         )
 
     with eth:
         st.metric(
             "ETH",
             f"¥{market['ethereum']['jpy']:,.0f}",
-            f"{market['ethereum']['jpy_24h_change']:+.2f}%",
+            (
+                f"{market['ethereum']['jpy_24h_change']:+.2f}%"
+            ),
         )
 
     with sol:
         st.metric(
             "SOL",
             f"¥{market['solana']['jpy']:,.0f}",
-            f"{market['solana']['jpy_24h_change']:+.2f}%",
+            (
+                f"{market['solana']['jpy_24h_change']:+.2f}%"
+            ),
         )
 
     st.divider()
 
     st.header("♨️ 今日の星待館")
+
     st.subheader(
         f"⭐ 星待館 Lv.{game['level']}"
     )
@@ -937,11 +1167,15 @@ with market_tab:
         )
 
     try:
-        inventory_for_balance = get_inventory()
+        inventory_for_balance = (
+            get_inventory()
+        )
 
-        available_coins = get_available_coins(
-            game,
-            inventory_for_balance,
+        available_coins = (
+            get_available_coins(
+                game,
+                inventory_for_balance,
+            )
         )
 
         st.metric(
@@ -959,13 +1193,17 @@ with market_tab:
     ) / 3
 
     st.divider()
-    st.header("📰 今日の星待館だより")
+
+    st.header(
+        "📰 今日の星待館だより"
+    )
 
     if average_change >= 5:
         st.write(
             "🎉 市場はかなり好調。"
             "星待館にもお客さんが続々とやってきています。"
         )
+
         st.write(
             "🐱 ねもちゃん絶好調。"
             "温泉街を元気いっぱい走り回っています。"
@@ -976,6 +1214,7 @@ with market_tab:
             "🌸 市場は好調。"
             "星待館にお客さんが増えています。"
         )
+
         st.write(
             "🐱 ねもちゃんご機嫌。"
             "今日は宿のお手伝いをしています。"
@@ -986,6 +1225,7 @@ with market_tab:
             "🍵 市場は穏やか。"
             "星待館ものんびりした一日です。"
         )
+
         st.write(
             "🐱 ねもちゃんは縁側でひと休み中。"
         )
@@ -995,6 +1235,7 @@ with market_tab:
             "🌧️ 市場は少し元気がありません。"
             "星待館も今日は静かです。"
         )
+
         st.write(
             "🐱 ねもちゃんは温泉でのんびりしています。"
         )
@@ -1004,6 +1245,7 @@ with market_tab:
             "⛈️ 市場は大荒れ。"
             "温泉街にも静かな空気が流れています。"
         )
+
         st.write(
             "🐱 「こんな日もあるよ」と、"
             "ねもちゃんは温泉につかっています。"
@@ -1032,7 +1274,9 @@ with fishing_tab:
     )
 
     try:
-        today_catch = get_today_catch()
+        today_catch = (
+            get_today_catch()
+        )
 
     except Exception as e:
         st.error(
@@ -1070,7 +1314,9 @@ with fishing_tab:
             "🐱 今日はもう釣りました！"
         )
 
-        st.subheader("🐟 今日の釣果")
+        st.subheader(
+            "🐟 今日の釣果"
+        )
 
         st.metric(
             "魚",
@@ -1088,7 +1334,9 @@ with fishing_tab:
         with col2:
             st.metric(
                 "サイズ",
-                f'{today_catch["size_cm"]} cm',
+                (
+                    f'{today_catch["size_cm"]} cm'
+                ),
             )
 
         st.write(
@@ -1100,10 +1348,16 @@ with fishing_tab:
         )
 
     st.divider()
-    st.subheader("📖 最近の釣果")
+
+    st.subheader(
+        "📖 最近の釣果"
+    )
 
     try:
-        recent = get_recent_catches()
+        recent = (
+            get_recent_catches()
+        )
+
     except Exception:
         recent = []
 
@@ -1115,13 +1369,17 @@ with fishing_tab:
                 f'{catch["size_cm"]}cm　'
                 f'{catch["rarity"]}'
             )
+
     else:
         st.caption(
             "まだ釣果がありません。"
         )
 
     st.divider()
-    st.subheader("📚 魚図鑑")
+
+    st.subheader(
+        "📚 魚図鑑"
+    )
 
     caught_names = {
         catch["fish_name"]
@@ -1131,7 +1389,8 @@ with fishing_tab:
     discovered = sum(
         1
         for fish in FISH_LIST
-        if fish["name"] in caught_names
+        if fish["name"]
+        in caught_names
     )
 
     st.write(
@@ -1140,11 +1399,15 @@ with fishing_tab:
     )
 
     for fish in FISH_LIST:
-        if fish["name"] in caught_names:
+        if (
+            fish["name"]
+            in caught_names
+        ):
             st.write(
                 f'🐟 **{fish["name"]}** '
                 f'{fish["rarity"]}'
             )
+
         else:
             st.write(
                 "❓ **？？？**"
@@ -1156,7 +1419,9 @@ with fishing_tab:
 # ==================================================
 
 with garden_tab:
-    st.header("🌸 ねもちゃん庭園")
+    st.header(
+        "🌸 ねもちゃん庭園"
+    )
 
     st.write(
         "星待館の小さなお庭。"
@@ -1178,9 +1443,14 @@ with garden_tab:
         st.code(str(e))
         st.stop()
 
-    st.subheader("🪴 今日のお庭")
+    st.subheader(
+        "🪴 今日のお庭"
+    )
+
     st.info(
-        garden_stage_text(garden)
+        garden_stage_text(
+            garden
+        )
     )
 
     if garden.get("plant_name"):
@@ -1208,13 +1478,17 @@ with garden_tab:
 
         if stage == 1:
             st.progress(33)
+
         elif stage == 2:
             st.progress(66)
+
         elif stage >= 3:
             st.progress(100)
 
     already_tended = (
-        garden.get("last_tended_date")
+        garden.get(
+            "last_tended_date"
+        )
         == today_str()
     )
 
@@ -1222,13 +1496,18 @@ with garden_tab:
         st.success(
             "🐱 今日はもうお庭のお世話をしました！"
         )
+
         st.caption(
             "また明日見に来よう。"
         )
 
     else:
-        if not garden.get("plant_name"):
-            button_text = "🌱 種を植える"
+        if not garden.get(
+            "plant_name"
+        ):
+            button_text = (
+                "🌱 種を植える"
+            )
 
         elif int(
             garden.get(
@@ -1250,8 +1529,11 @@ with garden_tab:
             use_container_width=True,
         ):
             try:
-                updated_garden, result = (
-                    tend_garden(garden)
+                (
+                    updated_garden,
+                    result,
+                ) = tend_garden(
+                    garden
                 )
 
                 if result == "planted":
@@ -1266,6 +1548,7 @@ with garden_tab:
 
                 elif result == "bloomed":
                     st.balloons()
+
                     st.success(
                         f"🌸 "
                         f"{updated_garden['plant_name']}"
@@ -1281,6 +1564,7 @@ with garden_tab:
                 st.code(str(e))
 
     st.divider()
+
     st.subheader(
         "🌺 これまで咲いた花"
     )
@@ -1304,7 +1588,10 @@ with garden_tab:
         )
 
     st.divider()
-    st.subheader("📗 植物図鑑")
+
+    st.subheader(
+        "📗 植物図鑑"
+    )
 
     bloomed_names = {
         bloom["plant_name"]
@@ -1314,7 +1601,8 @@ with garden_tab:
     discovered_plants = sum(
         1
         for plant in PLANT_LIST
-        if plant["name"] in bloomed_names
+        if plant["name"]
+        in bloomed_names
     )
 
     st.write(
@@ -1323,12 +1611,16 @@ with garden_tab:
     )
 
     for plant in PLANT_LIST:
-        if plant["name"] in bloomed_names:
+        if (
+            plant["name"]
+            in bloomed_names
+        ):
             st.write(
                 f'{plant["emoji"]} '
                 f'**{plant["name"]}** '
                 f'{plant["rarity"]}'
             )
+
         else:
             st.write(
                 "❓ **？？？**"
@@ -1340,7 +1632,9 @@ with garden_tab:
 # ==================================================
 
 with shop_tab:
-    st.header("🛍️ 星待館の売店")
+    st.header(
+        "🛍️ 星待館の売店"
+    )
 
     st.write(
         "旅の道具や、"
@@ -1348,7 +1642,9 @@ with shop_tab:
     )
 
     try:
-        inventory = get_inventory()
+        inventory = (
+            get_inventory()
+        )
 
     except Exception as e:
         st.error(
@@ -1357,9 +1653,11 @@ with shop_tab:
         st.code(str(e))
         st.stop()
 
-    available_coins = get_available_coins(
-        game,
-        inventory,
+    available_coins = (
+        get_available_coins(
+            game,
+            inventory,
+        )
     )
 
     st.metric(
@@ -1373,7 +1671,10 @@ with shop_tab:
     )
 
     st.divider()
-    st.subheader("🏪 商品")
+
+    st.subheader(
+        "🏪 商品"
+    )
 
     owned_keys = {
         row["item_key"]
@@ -1394,15 +1695,24 @@ with shop_tab:
             f"**{item['price']:,} G**"
         )
 
-        if item["key"] in owned_keys:
+        if (
+            item["key"]
+            in owned_keys
+        ):
             st.success(
                 "✅ 購入済み"
             )
 
-        elif available_coins < item["price"]:
+        elif (
+            available_coins
+            < item["price"]
+        ):
             st.button(
                 "Gが足りません",
-                key="poor_" + item["key"],
+                key=(
+                    "poor_"
+                    + item["key"]
+                ),
                 disabled=True,
                 use_container_width=True,
             )
@@ -1410,7 +1720,10 @@ with shop_tab:
         else:
             if st.button(
                 f"{item['price']:,}Gで購入",
-                key="buy_" + item["key"],
+                key=(
+                    "buy_"
+                    + item["key"]
+                ),
                 use_container_width=True,
             ):
                 try:
@@ -1420,7 +1733,10 @@ with shop_tab:
                         inventory,
                     )
 
-                    if result == "purchased":
+                    if (
+                        result
+                        == "purchased"
+                    ):
                         st.success(
                             f"{item['name']}を買いました！"
                         )
@@ -1431,7 +1747,10 @@ with shop_tab:
                             "すでに持っています。"
                         )
 
-                    elif result == "not_enough":
+                    elif (
+                        result
+                        == "not_enough"
+                    ):
                         st.warning(
                             "Gが足りません。"
                         )
@@ -1444,16 +1763,21 @@ with shop_tab:
 
         st.divider()
 
-    st.subheader("🎒 持ち物")
+    st.subheader(
+        "🎒 持ち物"
+    )
 
     if inventory:
         for owned in inventory:
             matching = next(
                 (
                     item
-                    for item in SHOP_ITEMS
-                    if item["key"]
-                    == owned["item_key"]
+                    for item
+                    in SHOP_ITEMS
+                    if (
+                        item["key"]
+                        == owned["item_key"]
+                    )
                 ),
                 None,
             )
@@ -1481,7 +1805,9 @@ with shop_tab:
 # ==================================================
 
 with secret_tab:
-    st.header("🌙 秘密の庭")
+    st.header(
+        "🌙 秘密の庭"
+    )
 
     st.caption(
         "NemoCollection2023 holder gate — β版"
@@ -1499,16 +1825,19 @@ with secret_tab:
         "署名・送金・ガス代は発生しません。"
     )
 
-    wallet_address = st.text_input(
-        "ウォレットアドレス",
-        placeholder="0x...",
-        help=(
-            "MetaMaskの公開ウォレットアドレスを入力してください。"
-            "シークレットリカバリーフレーズや秘密鍵は"
-            "絶対に入力しないでください。"
-        ),
-        key="nemo_holder_wallet",
-    ).strip()
+    wallet_address = (
+        st.text_input(
+            "ウォレットアドレス",
+            placeholder="0x...",
+            help=(
+                "MetaMaskの公開ウォレットアドレスを入力してください。"
+                "シークレットリカバリーフレーズや秘密鍵は"
+                "絶対に入力しないでください。"
+            ),
+            key="nemo_holder_wallet",
+        )
+        .strip()
+    )
 
     check_clicked = st.button(
         "🔎 Nemo NFTを確認",
@@ -1531,7 +1860,10 @@ with secret_tab:
                 "Polygon上のNemoCollection2023を確認しています…"
             ):
                 try:
-                    nfts, detected_chain = get_nemo_nfts(
+                    (
+                        nfts,
+                        detected_chain,
+                    ) = get_nemo_nfts(
                         wallet_address
                     )
 
@@ -1540,8 +1872,14 @@ with secret_tab:
                         "nemo_holder",
                         None,
                     )
+
                     st.session_state.pop(
                         "nemo_holder_nfts",
+                        None,
+                    )
+
+                    st.session_state.pop(
+                        "nemo_first_acquired_date",
                         None,
                     )
 
@@ -1571,12 +1909,35 @@ with secret_tab:
                         "nemo_holder_chain"
                     ] = detected_chain
 
+                    first_acquired_date = None
+
+                    if nfts:
+                        try:
+                            first_acquired_date = (
+                                get_nemo_first_acquired_date(
+                                    wallet_address
+                                )
+                            )
+
+                        except Exception:
+                            first_acquired_date = None
+
+                    st.session_state[
+                        "nemo_first_acquired_date"
+                    ] = first_acquired_date
+
     if st.session_state.get(
         "nemo_holder"
     ):
         nfts = st.session_state.get(
             "nemo_holder_nfts",
             [],
+        )
+
+        first_acquired_date = (
+            st.session_state.get(
+                "nemo_first_acquired_date"
+            )
         )
 
         st.success(
@@ -1596,7 +1957,9 @@ with secret_tab:
             first_nft = nfts[0]
 
             image_url = (
-                first_nft.get("image_url")
+                first_nft.get(
+                    "image_url"
+                )
                 or first_nft.get(
                     "display_image_url"
                 )
@@ -1617,20 +1980,38 @@ with secret_tab:
                 f"**確認できたNFT：{nft_name}**"
             )
 
-            if len(nfts) > 1:
-                st.caption(
-                    f"今回の取得範囲では "
-                    f"{len(nfts)} 点のNemo NFTを確認できました。"
-                )
+        st.divider()
+
+        st.markdown(
+            "### 📜 ねもとの記録"
+        )
+
+        if first_acquired_date:
+            st.write(
+                "**初めて出会った日：** "
+                f"{first_acquired_date}"
+            )
+
+        else:
+            st.write(
+                "**初めて出会った日：** "
+                "記録を確認できませんでした"
+            )
+
+        st.write(
+            "**現在一緒にいるねも：** "
+            f"{len(nfts)}人"
+        )
 
         st.divider()
+
         st.markdown(
             "### 🌸 Holder Only"
         )
 
         st.info(
             "ねもを見つけてくれて、ありがとう。  \n"
-            "この一枚の出会いが、  \n"
+            "この一枚との出会いが、  \n"
             "あなたの小さな物語になりますように。"
         )
 
@@ -1639,9 +2020,12 @@ with secret_tab:
             "(https://opensea.io/collection/nemocollection2023)"
         )
 
-    elif st.session_state.get(
-        "nemo_holder"
-    ) is False:
+    elif (
+        st.session_state.get(
+            "nemo_holder"
+        )
+        is False
+    ):
         st.warning(
             "このウォレットでは"
             "NemoCollection2023を確認できませんでした。"
