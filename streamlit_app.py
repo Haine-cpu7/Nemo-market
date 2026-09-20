@@ -1045,6 +1045,175 @@ def get_nemo_first_acquired_date(
 
 
 # ==================================================
+# 秘密の庭 / 1日1回の探索
+# ==================================================
+
+SECRET_GARDEN_ITEMS = [
+    {
+        "key": "moon_white_flower",
+        "emoji": "🌙",
+        "name": "月白花",
+        "rarity": "★★★",
+        "weight": 42,
+        "description": "夜だけ咲く、秘密の庭の花",
+    },
+    {
+        "key": "star_shadow_medaka",
+        "emoji": "🐟",
+        "name": "星影メダカ",
+        "rarity": "★★★",
+        "weight": 31,
+        "description": "秘密の池にだけ出る魚",
+    },
+    {
+        "key": "old_nemo_diary",
+        "emoji": "📜",
+        "name": "ねもの古い日記",
+        "rarity": "★★★★",
+        "weight": 18,
+        "description": "2023年のねもコレにまつわる短文",
+    },
+    {
+        "key": "old_key",
+        "emoji": "🗝️",
+        "name": "古びた鍵",
+        "rarity": "★★★★",
+        "weight": 8,
+        "description": "3本集めると、旧庭園への道がひらく",
+    },
+    {
+        "key": "nemo_fragment",
+        "emoji": "✨",
+        "name": "Nemoの欠片",
+        "rarity": "★★★★★",
+        "weight": 1,
+        "description": "ごくまれに見つかる、きらきらした欠片",
+    },
+]
+
+
+def get_secret_garden_log(address, limit=1000):
+    url = (
+        f"{SUPABASE_URL}/rest/v1/secret_garden_log"
+    )
+
+    params = {
+        "wallet_address": f"eq.{address.lower()}",
+        "select": "*",
+        "order": "found_at.desc",
+        "limit": str(limit),
+    }
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        params=params,
+        timeout=10,
+    )
+    response.raise_for_status()
+
+    return response.json()
+
+
+def get_today_secret_find(address):
+    url = (
+        f"{SUPABASE_URL}/rest/v1/secret_garden_log"
+    )
+
+    params = {
+        "wallet_address": f"eq.{address.lower()}",
+        "explore_date": f"eq.{today_str()}",
+        "select": "*",
+        "limit": "1",
+    }
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        params=params,
+        timeout=10,
+    )
+    response.raise_for_status()
+
+    rows = response.json()
+
+    return rows[0] if rows else None
+
+
+def explore_secret_garden(address):
+    existing = get_today_secret_find(
+        address
+    )
+
+    if existing:
+        return existing, "already"
+
+    item = random.choices(
+        SECRET_GARDEN_ITEMS,
+        weights=[
+            row["weight"]
+            for row in SECRET_GARDEN_ITEMS
+        ],
+        k=1,
+    )[0]
+
+    payload = {
+        "wallet_address": address.lower(),
+        "explore_date": today_str(),
+        "item_key": item["key"],
+        "item_name": item["name"],
+        "rarity": item["rarity"],
+        "emoji": item["emoji"],
+    }
+
+    url = (
+        f"{SUPABASE_URL}/rest/v1/secret_garden_log"
+    )
+
+    response = requests.post(
+        url,
+        headers={
+            **HEADERS,
+            "Prefer": "return=representation",
+        },
+        json=payload,
+        timeout=10,
+    )
+
+    # 同じ日にほぼ同時に押された場合も、
+    # DB側のUNIQUE制約で1回に固定する。
+    if response.status_code == 409:
+        existing = get_today_secret_find(
+            address
+        )
+        return existing, "already"
+
+    response.raise_for_status()
+
+    rows = response.json()
+
+    return (
+        rows[0] if rows else payload,
+        "found",
+    )
+
+
+def get_secret_item_meta(item_key):
+    for item in SECRET_GARDEN_ITEMS:
+        if item["key"] == item_key:
+            return item
+
+    return {
+        "key": item_key,
+        "emoji": "❔",
+        "name": "？？？",
+        "rarity": "",
+        "weight": 0,
+        "description": "",
+    }
+
+
+# ==================================================
 # 共通データ読み込み
 # ==================================================
 
@@ -1934,6 +2103,13 @@ with secret_tab:
             [],
         )
 
+        holder_address = (
+            st.session_state.get(
+                "nemo_holder_address",
+                wallet_address,
+            )
+        )
+
         first_acquired_date = (
             st.session_state.get(
                 "nemo_first_acquired_date"
@@ -2005,14 +2181,223 @@ with secret_tab:
 
         st.divider()
 
+        # ------------------------------------------
+        # 1日1回の探索
+        # ------------------------------------------
+
         st.markdown(
-            "### 🌸 Holder Only"
+            "### 🌙 秘密の庭を探索"
         )
 
+        st.caption(
+            "1日1回だけ、秘密の庭を探すことができます。"
+        )
+
+        try:
+            today_find = get_today_secret_find(
+                holder_address
+            )
+
+        except Exception as exc:
+            today_find = None
+
+            st.error(
+                "秘密の庭の記録を読み込めませんでした。"
+            )
+
+            st.caption(
+                "Supabaseにsecret_garden_logテーブルが"
+                "作成されているか確認してください。"
+            )
+
+            st.caption(
+                f"開発用エラー: {exc}"
+            )
+
+        else:
+            if today_find:
+                today_meta = get_secret_item_meta(
+                    today_find.get(
+                        "item_key",
+                        "",
+                    )
+                )
+
+                st.success(
+                    "今日は "
+                    f"{today_meta['emoji']} "
+                    f"{today_meta['name']} "
+                    f"{today_meta['rarity']} "
+                    "を見つけました。"
+                )
+
+                if today_meta[
+                    "description"
+                ]:
+                    st.caption(
+                        today_meta[
+                            "description"
+                        ]
+                    )
+
+            else:
+                if st.button(
+                    "🔎 今日の秘密の庭を探索する",
+                    type="primary",
+                    use_container_width=True,
+                    key="secret_garden_explore",
+                ):
+                    try:
+                        found, result = (
+                            explore_secret_garden(
+                                holder_address
+                            )
+                        )
+
+                    except Exception as exc:
+                        st.error(
+                            "探索の記録に失敗しました。"
+                        )
+
+                        st.caption(
+                            f"開発用エラー: {exc}"
+                        )
+
+                    else:
+                        if found:
+                            found_meta = (
+                                get_secret_item_meta(
+                                    found.get(
+                                        "item_key",
+                                        "",
+                                    )
+                                )
+                            )
+
+                            if result == "found":
+                                st.balloons()
+
+                                st.success(
+                                    "見つけた！  "
+                                    f"{found_meta['emoji']} "
+                                    f"{found_meta['name']} "
+                                    f"{found_meta['rarity']}"
+                                )
+
+                            else:
+                                st.info(
+                                    "今日はもう探索済みです。"
+                                )
+
+                        st.rerun()
+
+        # ------------------------------------------
+        # 秘密の図鑑
+        # ------------------------------------------
+
+        st.divider()
+
+        st.markdown(
+            "### 📖 秘密の図鑑"
+        )
+
+        try:
+            secret_log = get_secret_garden_log(
+                holder_address
+            )
+
+        except Exception:
+            secret_log = []
+
+        item_counts = {}
+
+        for row in secret_log:
+            key = row.get("item_key")
+
+            if not key:
+                continue
+
+            item_counts[key] = (
+                item_counts.get(key, 0)
+                + 1
+            )
+
+        discovered_keys = set(
+            item_counts.keys()
+        )
+
+        st.write(
+            f"**{len(discovered_keys)} / "
+            f"{len(SECRET_GARDEN_ITEMS)} 種類発見**"
+        )
+
+        for item in SECRET_GARDEN_ITEMS:
+            count = item_counts.get(
+                item["key"],
+                0,
+            )
+
+            if count > 0:
+                st.markdown(
+                    f"{item['emoji']} "
+                    f"**{item['name']}** "
+                    f"{item['rarity']}　"
+                    f"×{count}"
+                )
+
+                st.caption(
+                    item["description"]
+                )
+
+            else:
+                st.markdown(
+                    "❓ **？？？**"
+                )
+
+        # ------------------------------------------
+        # 古びた鍵で別エリア解放
+        # ------------------------------------------
+
+        key_count = item_counts.get(
+            "old_key",
+            0,
+        )
+
+        st.divider()
+
+        if key_count >= 3:
+            st.success(
+                "🔓 古びた鍵が3本そろいました。"
+            )
+
+            st.markdown(
+                "### 🗝️ 旧庭園"
+            )
+
+            st.write(
+                "秘密の庭の奥に、"
+                "長いあいだ閉じられていた小径がひらきました。"
+            )
+
+            st.caption(
+                "ここは、鍵を3本集めた人だけが入れる場所です。"
+            )
+
+        else:
+            st.caption(
+                f"🗝️ 古びた鍵：{key_count} / 3"
+            )
+
+            st.caption(
+                "3本そろうと、秘密の庭の奥にある"
+                "別エリアがひらきます。"
+            )
+
+        st.divider()
+
         st.info(
-            "ねもを見つけてくれて、ありがとう。  \n"
-            "この一枚との出会いが、  \n"
-            "あなたの小さな物語になりますように。"
+            "ここで見つけたものは、"
+            "あなたとねもの小さな記録として残ります。"
         )
 
         st.markdown(
