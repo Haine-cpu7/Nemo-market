@@ -311,7 +311,7 @@ def get_today_catch():
     return rows[0] if rows else None
 
 
-def get_recent_catches(limit=30):
+def get_recent_catches(limit=1000):
     url = (
         f"{SUPABASE_URL}/rest/v1/fishing_log"
         "?select=*"
@@ -502,7 +502,7 @@ def add_bloom_log(plant_name, rarity):
     response.raise_for_status()
 
 
-def get_garden_log(limit=100):
+def get_garden_log(limit=1000):
     url = (
         f"{SUPABASE_URL}/rest/v1/garden_log"
         "?select=*"
@@ -1217,21 +1217,41 @@ def get_secret_item_meta(item_key):
 # 共通データ読み込み
 # ==================================================
 
+market = None
+market_error = None
+
 try:
     market = get_market_data()
-    game = load_game()
 
-    game = update_game_once_per_day(
-        game,
-        market,
-    )
+except Exception as e:
+    # CoinGeckoの429などで市場データが取れなくても、
+    # Nemo Garden全体は止めない。
+    market_error = e
+
+try:
+    game = load_game()
 
 except Exception as e:
     st.error(
-        "ねもちゃん市場の読み込みに失敗しました。"
+        "星待館のセーブデータを読み込めませんでした。"
     )
     st.code(str(e))
     st.stop()
+
+if market is not None:
+    try:
+        game = update_game_once_per_day(
+            game,
+            market,
+        )
+
+    except Exception as e:
+        # 市場連動の1日更新だけ失敗した場合も、
+        # 保存済みの星待館データで表示を続ける。
+        st.warning(
+            "今日の星待館の市場連動更新は"
+            "一時的にお休みしています。"
+        )
 
 
 # ==================================================
@@ -1274,33 +1294,45 @@ st.caption(
 with market_tab:
     st.header("📈 今日の市場")
 
-    btc, eth, sol = st.columns(3)
+    if market is not None:
+        btc, eth, sol = st.columns(3)
 
-    with btc:
-        st.metric(
-            "BTC",
-            f"¥{market['bitcoin']['jpy']:,.0f}",
-            (
-                f"{market['bitcoin']['jpy_24h_change']:+.2f}%"
-            ),
+        with btc:
+            st.metric(
+                "BTC",
+                f"¥{market['bitcoin']['jpy']:,.0f}",
+                (
+                    f"{market['bitcoin']['jpy_24h_change']:+.2f}%"
+                ),
+            )
+
+        with eth:
+            st.metric(
+                "ETH",
+                f"¥{market['ethereum']['jpy']:,.0f}",
+                (
+                    f"{market['ethereum']['jpy_24h_change']:+.2f}%"
+                ),
+            )
+
+        with sol:
+            st.metric(
+                "SOL",
+                f"¥{market['solana']['jpy']:,.0f}",
+                (
+                    f"{market['solana']['jpy_24h_change']:+.2f}%"
+                ),
+            )
+
+    else:
+        st.info(
+            "☕ 市場データはただいま休憩中です。"
         )
 
-    with eth:
-        st.metric(
-            "ETH",
-            f"¥{market['ethereum']['jpy']:,.0f}",
-            (
-                f"{market['ethereum']['jpy_24h_change']:+.2f}%"
-            ),
-        )
-
-    with sol:
-        st.metric(
-            "SOL",
-            f"¥{market['solana']['jpy']:,.0f}",
-            (
-                f"{market['solana']['jpy_24h_change']:+.2f}%"
-            ),
+        st.caption(
+            "外部APIの取得回数制限などで"
+            "一時的に価格を取得できない場合があります。"
+            "釣り・庭園・売店・秘密の庭はそのまま遊べます。"
         )
 
     st.divider()
@@ -1355,69 +1387,80 @@ with market_tab:
     except Exception:
         pass
 
-    average_change = (
-        market["bitcoin"]["jpy_24h_change"]
-        + market["ethereum"]["jpy_24h_change"]
-        + market["solana"]["jpy_24h_change"]
-    ) / 3
-
     st.divider()
 
     st.header(
         "📰 今日の星待館だより"
     )
 
-    if average_change >= 5:
-        st.write(
-            "🎉 市場はかなり好調。"
-            "星待館にもお客さんが続々とやってきています。"
-        )
+    if market is not None:
+        average_change = (
+            market["bitcoin"]["jpy_24h_change"]
+            + market["ethereum"]["jpy_24h_change"]
+            + market["solana"]["jpy_24h_change"]
+        ) / 3
 
-        st.write(
-            "🐱 ねもちゃん絶好調。"
-            "温泉街を元気いっぱい走り回っています。"
-        )
+        if average_change >= 5:
+            st.write(
+                "🎉 市場はかなり好調。"
+                "星待館にもお客さんが続々とやってきています。"
+            )
 
-    elif average_change >= 2:
-        st.write(
-            "🌸 市場は好調。"
-            "星待館にお客さんが増えています。"
-        )
+            st.write(
+                "🐱 ねもちゃん絶好調。"
+                "温泉街を元気いっぱい走り回っています。"
+            )
 
-        st.write(
-            "🐱 ねもちゃんご機嫌。"
-            "今日は宿のお手伝いをしています。"
-        )
+        elif average_change >= 2:
+            st.write(
+                "🌸 市場は好調。"
+                "星待館にお客さんが増えています。"
+            )
 
-    elif average_change >= 0:
-        st.write(
-            "🍵 市場は穏やか。"
-            "星待館ものんびりした一日です。"
-        )
+            st.write(
+                "🐱 ねもちゃんご機嫌。"
+                "今日は宿のお手伝いをしています。"
+            )
 
-        st.write(
-            "🐱 ねもちゃんは縁側でひと休み中。"
-        )
+        elif average_change >= 0:
+            st.write(
+                "🍵 市場は穏やか。"
+                "星待館ものんびりした一日です。"
+            )
 
-    elif average_change >= -3:
-        st.write(
-            "🌧️ 市場は少し元気がありません。"
-            "星待館も今日は静かです。"
-        )
+            st.write(
+                "🐱 ねもちゃんは縁側でひと休み中。"
+            )
 
-        st.write(
-            "🐱 ねもちゃんは温泉でのんびりしています。"
-        )
+        elif average_change >= -3:
+            st.write(
+                "🌧️ 市場は少し元気がありません。"
+                "星待館も今日は静かです。"
+            )
+
+            st.write(
+                "🐱 ねもちゃんは温泉でのんびりしています。"
+            )
+
+        else:
+            st.write(
+                "⛈️ 市場は大荒れ。"
+                "温泉街にも静かな空気が流れています。"
+            )
+
+            st.write(
+                "🐱 「こんな日もあるよ」と、"
+                "ねもちゃんは温泉につかっています。"
+            )
 
     else:
         st.write(
-            "⛈️ 市場は大荒れ。"
-            "温泉街にも静かな空気が流れています。"
+            "🍵 市場からのお便りは今日はお休み。"
+            "星待館はいつもどおり営業しています。"
         )
 
         st.write(
-            "🐱 「こんな日もあるよ」と、"
-            "ねもちゃんは温泉につかっています。"
+            "🐱 ねもちゃんは縁側でのんびりしています。"
         )
 
     st.write(
@@ -1567,15 +1610,62 @@ with fishing_tab:
         f"{len(FISH_LIST)} 種類発見**"
     )
 
+    fish_complete = (
+        discovered
+        == len(FISH_LIST)
+    )
+
+    if fish_complete:
+        st.success(
+            "🏆 魚図鑑コンプリート！"
+        )
+
+        st.markdown(
+            "### 🐟 星待川のぬしを知る者"
+        )
+
+        st.caption(
+            "図鑑は完成しました。"
+            "これからも釣りは続き、"
+            "釣った数と最大サイズの記録が残ります。"
+        )
+
     for fish in FISH_LIST:
         if (
             fish["name"]
             in caught_names
         ):
-            st.write(
-                f'🐟 **{fish["name"]}** '
-                f'{fish["rarity"]}'
-            )
+            if fish_complete:
+                fish_records = [
+                    row
+                    for row in recent
+                    if row["fish_name"]
+                    == fish["name"]
+                ]
+
+                fish_count = len(
+                    fish_records
+                )
+
+                max_size = max(
+                    float(
+                        row["size_cm"]
+                    )
+                    for row in fish_records
+                )
+
+                st.write(
+                    f'🐟 **{fish["name"]}** '
+                    f'{fish["rarity"]}　'
+                    f'×{fish_count}　'
+                    f'最大 {max_size:.1f}cm'
+                )
+
+            else:
+                st.write(
+                    f'🐟 **{fish["name"]}** '
+                    f'{fish["rarity"]}'
+                )
 
         else:
             st.write(
@@ -1779,16 +1869,52 @@ with garden_tab:
         f"{len(PLANT_LIST)} 種類発見**"
     )
 
+    garden_complete = (
+        discovered_plants
+        == len(PLANT_LIST)
+    )
+
+    if garden_complete:
+        st.success(
+            "🌸 植物図鑑コンプリート！"
+        )
+
+        st.markdown(
+            "### 🌸 星待庭園 完成"
+        )
+
+        st.caption(
+            "図鑑は完成しました。"
+            "これからも庭のお世話は続き、"
+            "咲いた回数が記録されます。"
+        )
+
     for plant in PLANT_LIST:
         if (
             plant["name"]
             in bloomed_names
         ):
-            st.write(
-                f'{plant["emoji"]} '
-                f'**{plant["name"]}** '
-                f'{plant["rarity"]}'
-            )
+            if garden_complete:
+                bloom_count = sum(
+                    1
+                    for bloom in garden_log
+                    if bloom["plant_name"]
+                    == plant["name"]
+                )
+
+                st.write(
+                    f'{plant["emoji"]} '
+                    f'**{plant["name"]}** '
+                    f'{plant["rarity"]}　'
+                    f'×{bloom_count}'
+                )
+
+            else:
+                st.write(
+                    f'{plant["emoji"]} '
+                    f'**{plant["name"]}** '
+                    f'{plant["rarity"]}'
+                )
 
         else:
             st.write(
@@ -2353,6 +2479,35 @@ with secret_tab:
                 st.markdown(
                     "❓ **？？？**"
                 )
+
+        secret_complete = (
+            len(discovered_keys)
+            == len(SECRET_GARDEN_ITEMS)
+        )
+
+        if secret_complete:
+            st.success(
+                "🌙 秘密の図鑑コンプリート！"
+            )
+
+            st.markdown(
+                "### 🌌 秘密の庭の奥"
+            )
+
+            st.write(
+                "すべての記録を見つけると、"
+                "庭のいちばん奥に小さな場所が現れました。"
+            )
+
+            st.info(
+                "ここには、2023年から続く"
+                "ねもの足跡が静かに残っています。"
+            )
+
+            st.caption(
+                "秘密の図鑑を完成させた人だけが"
+                "見つけられる場所です。"
+            )
 
         # ------------------------------------------
         # 古びた鍵で別エリア解放
